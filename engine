@@ -1,0 +1,71 @@
+local UserInputService = game:GetService("UserInputService")
+local Players = game:GetService("Players")
+local TextChatService = game:GetService("TextChatService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local player = Players.LocalPlayer
+
+-- Function to safely send a chat message
+local function sendChatMessage(message)
+	if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
+		local textChannel = TextChatService.TextChannels:FindFirstChild("RBXGeneral")
+		if textChannel then
+			textChannel:SendAsync(message)
+		end
+	else
+		local chatEvents = ReplicatedStorage:FindFirstChild("DefaultChatSystemChatEvents")
+		local sayMessageRequest = chatEvents and chatEvents:FindFirstChild("SayMessageRequest")
+		if sayMessageRequest then
+			sayMessageRequest:FireServer(message, "All")
+		end
+	end
+end
+
+-- Listen for key presses
+UserInputService.InputBegan:Connect(function(input, gameProcessedEvent)
+	-- Don't trigger if the player is typing in chat
+	if gameProcessedEvent then return end
+
+	-- Check if the player presses G
+	if input.KeyCode == Enum.KeyCode.G then
+		local character = player.Character
+		if not character then return end
+		
+		local humanoid = character:FindFirstChildOfClass("Humanoid")
+		if not humanoid then return end
+		
+		-- Find the seat the player is physically sitting in
+		local seat = humanoid.SeatPart
+		if seat and seat:IsA("VehicleSeat") then
+			
+			-- Look for 'Status' and 'Engine' inside the active seat
+			local status = seat:FindFirstChild("Status")
+			if not status then
+				-- If it's not inside the seat, check if it's inside the body folder
+				local body = seat.Parent
+				if body then
+					status = body:FindFirstChild("Status") or (body:FindFirstChild("VehicleSeat") and body.VehicleSeat:FindFirstChild("Status"))
+				end
+			end
+			
+			if status then
+				local engine = status:FindFirstChild("Engine")
+				if engine and engine:IsA("BoolValue") then
+					-- Toggle the boolean value and send the chat message
+					if engine.Value == true then
+						engine.Value = false
+						sendChatMessage("/me turned off the engine on the vehicle")
+					else
+						engine.Value = true
+						sendChatMessage("/me started the engine on the vehicle")
+					end
+				else
+					warn("Engine BoolValue was not found inside Status folder!")
+				end
+			else
+				warn("Status folder was not found near the VehicleSeat!")
+			end
+			
+		end
+	end
+end)
