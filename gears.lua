@@ -9,6 +9,9 @@ local currentSeat = nil
 local gasValueObject = nil
 local loopConnection = nil
 
+-- Max cap boundary rule
+local MAX_GEAR = 12
+
 -- Helper function to fetch the active car's gear object
 local function getActiveGearValue()
     local character = player.Character
@@ -34,7 +37,7 @@ end
 local function cleanAndPumpVehicle(seat)
     currentSeat = seat
     
-    -- 1. Find the vehicle body from the seat
+    -- Find the vehicle body from the seat
     local body = seat.Parent
     if body then
         -- Safely clear TouchInterests out of the requested targets if they exist
@@ -49,7 +52,7 @@ local function cleanAndPumpVehicle(seat)
             end
         end
     end
-end -- <-- FIXED: Added missing closure for the cleanAndPumpVehicle function
+end
 
 local function stopVehicleLoop()
     if loopConnection then
@@ -83,18 +86,44 @@ if player.Character then setupSeatTracking(player.Character) end
 -- ⌨️ KEY DETECTION PIPELINES
 -- ==========================================
 
--- 1. DETECT KEY DOWN (Press E or Hold F)
+-- 1. DETECT KEY DOWN (Press E, Q, or Hold F)
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end 
     
     local gearVal = getActiveGearValue()
     if not gearVal then return end
     
+    -- Shift Up to Multiples of Two (Max 12)
     if input.KeyCode == Enum.KeyCode.E then
         if storedGearValue == nil then
-            gearVal.Value = gearVal.Value + 1
+            task.spawn(function()
+                task.wait(0.02) -- Anti-conflict layout buffer delay
+                local currentVal = gearVal.Value
+                -- Round to the next highest multiple of 2
+                local nextGear = math.floor((currentVal / 2) + 1) * 2
+                if nextGear > MAX_GEAR then
+                    nextGear = MAX_GEAR
+                end
+                gearVal.Value = nextGear
+            end)
         end
         
+    -- Shift Down to Multiples of Two (Min 0)
+    elseif input.KeyCode == Enum.KeyCode.Q then
+        if storedGearValue == nil then
+            task.spawn(function()
+                task.wait(0.02) -- Anti-conflict layout buffer delay
+                local currentVal = gearVal.Value
+                -- Round to the next lowest multiple of 2
+                local nextGear = math.ceil((currentVal / 2) - 1) * 2
+                if nextGear < 0 then
+                    nextGear = 0
+                end
+                gearVal.Value = nextGear
+            end)
+        end
+        
+    -- Emergency Clutch Hold Mode
     elseif input.KeyCode == Enum.KeyCode.F then
         if storedGearValue == nil then
             storedGearValue = gearVal.Value 
@@ -110,7 +139,7 @@ UserInputService.InputEnded:Connect(function(input, gameProcessed)
         
         if storedGearValue ~= nil then
             if gearVal then
-                gearVal.Value = storedGearValue
+                gearVal.Value = math.clamp(storedGearValue, 0, MAX_GEAR)
             end
             storedGearValue = nil 
         end
